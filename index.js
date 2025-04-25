@@ -24,7 +24,7 @@ app.post('/api/crea-azienda', async (req, res) => {
 
   try {
     const risposta = await axios.post(
-      'https://invoice.openapi.com/IT-configurations', // ✅ Endpoint corretto
+      'https://invoice.openapi.it/IT-configurations', // ✅ Endpoint corretto
       {
         tax_id: dati.partitaIva,
         email: dati.email,
@@ -71,7 +71,7 @@ app.post('/api/invia-scontrino', async (req, res) => {
 
   try {
     const risposta = await axios.post(
-      'https://invoice.openapi.com/IT-receipts', // ✅ Endpoint corretto
+     'https://invoice.openapi.it/IT-receipts', // ✅ Endpoint corretto
       {
         configuration_tax_id: dati.partitaIva,
         receipt_date: dati.data,
