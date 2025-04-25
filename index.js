@@ -7,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-const OPENAPI_KEY = '680a692f17e7399b1404f3fa'; // Chiave SANDBOX
+const OPENAPI_KEY = '67fff535b6f89ac63306bb35'; // Chiave SANDBOX
 
 // 🔧 TEST ROUTE
 app.get('/', (req, res) => {
@@ -24,7 +24,7 @@ app.post('/api/crea-azienda', async (req, res) => {
 
   try {
     const risposta = await axios.post(
-      'https://sandbox.openapi.com/IT-configurations',
+     'https://api.openapi.it/it-configurations',
       {
         tax_id: dati.partitaIva,
         email: dati.email,
@@ -71,7 +71,7 @@ app.post('/api/invia-scontrino', async (req, res) => {
 
   try {
     const risposta = await axios.post(
-      'https://sandbox.openapi.com/IT-receipts',
+      'https://api.openapi.it/it-receipts',
       {
         configuration_tax_id: dati.partitaIva,
         receipt_date: dati.data,
