@@ -24,7 +24,7 @@ app.post('/api/crea-azienda', async (req, res) => {
 
   try {
     const risposta = await axios.post(
-     'https://api.openapi.it/it-configurations',
+     'https://api.openapi.com/it-configurations',
       {
         tax_id: dati.partitaIva,
         email: dati.email,
@@ -71,7 +71,7 @@ app.post('/api/invia-scontrino', async (req, res) => {
 
   try {
     const risposta = await axios.post(
-      'https://api.openapi.it/it-receipts',
+     'https://api.openapi.com/it-receipts',
       {
         configuration_tax_id: dati.partitaIva,
         receipt_date: dati.data,
