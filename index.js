@@ -7,14 +7,14 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-const OPENAPI_KEY = '67fff535b6f89ac63306bb35'; // Chiave SANDBOX
+const OPENAPI_KEY = '67fff535b6f89ac63306bb35'; // ✅ Chiave di PRODUZIONE Openapi
 
-// 🔧 TEST ROUTE
+// 🔍 ROUTE DI TEST
 app.get('/', (req, res) => {
-  res.send('✅ Backend SANDBOX attivo e funzionante!');
+  res.send('✅ Backend PRODUZIONE attivo e funzionante!');
 });
 
-// 🏗️ CREA CONFIGURAZIONE AZIENDA
+// 🏢 CREAZIONE CONFIGURAZIONE AZIENDA
 app.post('/api/crea-azienda', async (req, res) => {
   const dati = req.body;
 
@@ -24,7 +24,7 @@ app.post('/api/crea-azienda', async (req, res) => {
 
   try {
     const risposta = await axios.post(
-     'https://api.openapi.com/it-configurations',
+      'https://invoice.openapi.com/IT-configurations', // ✅ Endpoint corretto
       {
         tax_id: dati.partitaIva,
         email: dati.email,
@@ -54,7 +54,7 @@ app.post('/api/crea-azienda', async (req, res) => {
   }
 });
 
-// 🧾 INVIA SCONTRINO
+// 🧾 INVIO SCONTRINO
 app.post('/api/invia-scontrino', async (req, res) => {
   const dati = req.body;
 
@@ -71,7 +71,7 @@ app.post('/api/invia-scontrino', async (req, res) => {
 
   try {
     const risposta = await axios.post(
-     'https://api.openapi.com/it-receipts',
+      'https://invoice.openapi.com/IT-receipts', // ✅ Endpoint corretto
       {
         configuration_tax_id: dati.partitaIva,
         receipt_date: dati.data,
@@ -101,7 +101,7 @@ app.post('/api/invia-scontrino', async (req, res) => {
   }
 });
 
-// 🚀 AVVIA IL SERVER
+// 🚀 AVVIO SERVER
 app.listen(PORT, () => {
-  console.log(`✅ Server SANDBOX avviato sulla porta ${PORT}`);
+  console.log(`✅ Server PRODUZIONE avviato sulla porta ${PORT}`);
 });
