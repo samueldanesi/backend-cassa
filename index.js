@@ -7,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-const OPENAPI_KEY = '67fff535b6f89ac63306bb35'; // ✅ Chiave di PRODUZIONE Openapi
+const OPENAPI_KEY = '680a692f17e7399b1404f3fa'; // ✅ Chiave di PRODUZIONE Openapi
 
 // 🔍 ROUTE DI TEST
 app.get('/', (req, res) => {
@@ -31,7 +31,7 @@ app.post('/api/crea-azienda', async (req, res) => {
 
   try {
     const risposta = await axios.post(
-        'https://invoice.openapi.com/IT-configurations',
+        'https://test.invoice.openapi.com/IT-configurations',
         {
             tax_id: dati.partitaIva,
             email: dati.email,
@@ -84,7 +84,7 @@ app.post('/api/invia-scontrino', async (req, res) => {
   
     try {
       const risposta = await axios.post(
-        'https://invoice.openapi.com/IT-receipts',
+       'https://test.invoice.openapi.com/IT-receipts',
         {
           configuration_tax_id: dati.partitaIva,
           receipt_date: new Date().toISOString().split('T')[0], // data automatica
