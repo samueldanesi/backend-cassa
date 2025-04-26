@@ -45,7 +45,7 @@ app.post('/api/crea-azienda', async (req, res) => {
 
     res.status(200).json({ 
         success: true, 
-        company_id: risposta.data?.tax_id, // usa tax_id come company_id
+        company_id: risposta.data?.configuration_id || risposta.data?.tax_id || null, 
         datiOpenapi: risposta.data 
       });
   } catch (errore) {
