@@ -24,24 +24,25 @@ app.post('/api/crea-azienda', async (req, res) => {
 
   try {
     const risposta = await axios.post(
-      'https://invoice.openapi.com/IT-configurations', // ✅ Endpoint corretto
-      {
-        tax_id: dati.partitaIva,
-        email: dati.email,
-        company_name: dati.ragioneSociale,
-        name: dati.ragioneSociale,
-        contact_email: dati.email || 'no-reply@azienda.it',
-        contact_phone: dati.telefono || '',
-        fiscal_id: dati.codiceFiscale,
-        address: dati.indirizzo,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${OPENAPI_KEY}`,
-          'Content-Type': 'application/json',
+        'https://invoice.openapi.com/IT-configurations',
+        {
+          tax_id: dati.partitaIva,
+          email: dati.email,
+          company_name: dati.ragioneSociale,
+          name: dati.ragioneSociale,
+          contact_email: dati.email || 'no-reply@azienda.it',
+          contact_phone: dati.telefono || '',
+          fiscal_id: dati.codiceFiscale,
+          address: dati.indirizzo,
+          receipts: true, // 🔥 Devi AGGIUNGERE QUESTA RIGA QUI
         },
-      }
-    );
+        {
+          headers: {
+            Authorization: `Bearer ${OPENAPI_KEY}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
 
     res.status(200).json({ 
         success: true, 
