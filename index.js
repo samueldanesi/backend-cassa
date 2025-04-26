@@ -24,9 +24,10 @@ app.post('/api/crea-azienda', async (req, res) => {
     !dati.codiceFiscale ||
     !dati.indirizzo ||
     !dati.usernameFisconline ||
-    !dati.passwordFisconline
+    !dati.passwordFisconline ||
+    !dati.pinFisconline
   ) {
-    return res.status(400).json({ errore: 'Tutti i campi fiscali e le credenziali Fisconline sono obbligatori' });
+    return res.status(400).json({ errore: 'Tutti i campi fiscali e le credenziali Fisconline + PIN sono obbligatori' });
   }
 
   try {
@@ -44,6 +45,7 @@ app.post('/api/crea-azienda', async (req, res) => {
             receipts: true,
             fisconline_username: dati.usernameFisconline,
             fisconline_password: dati.passwordFisconline,
+            fisconline_pin: dati.pinFisconline,
           },
         {
           headers: {
