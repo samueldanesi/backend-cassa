@@ -43,7 +43,11 @@ app.post('/api/crea-azienda', async (req, res) => {
       }
     );
 
-    res.status(200).json({ success: true, company_id: risposta.data?.company_id ?? risposta.data?.id, datiOpenapi: risposta.data });
+    res.status(200).json({ 
+        success: true, 
+        company_id: risposta.data?.tax_id, // usa tax_id come company_id
+        datiOpenapi: risposta.data 
+      });
   } catch (errore) {
     if (errore.response?.status === 409) {
       return res.status(200).json({ success: true, messaggio: 'Azienda già presente su Openapi' });
