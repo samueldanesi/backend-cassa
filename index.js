@@ -18,24 +18,33 @@ app.get('/', (req, res) => {
 app.post('/api/crea-azienda', async (req, res) => {
   const dati = req.body;
 
-  if (!dati.partitaIva || !dati.ragioneSociale || !dati.codiceFiscale || !dati.indirizzo) {
-    return res.status(400).json({ errore: 'Tutti i campi fiscali sono obbligatori' });
+  if (
+    !dati.partitaIva ||
+    !dati.ragioneSociale ||
+    !dati.codiceFiscale ||
+    !dati.indirizzo ||
+    !dati.usernameFisconline ||
+    !dati.passwordFisconline
+  ) {
+    return res.status(400).json({ errore: 'Tutti i campi fiscali e le credenziali Fisconline sono obbligatori' });
   }
 
   try {
     const risposta = await axios.post(
         'https://invoice.openapi.com/IT-configurations',
         {
-          tax_id: dati.partitaIva,
-          email: dati.email,
-          company_name: dati.ragioneSociale,
-          name: dati.ragioneSociale,
-          contact_email: dati.email || 'no-reply@azienda.it',
-          contact_phone: dati.telefono || '',
-          fiscal_id: dati.codiceFiscale,
-          address: dati.indirizzo,
-          receipts: true, // 🔥 Devi AGGIUNGERE QUESTA RIGA QUI
-        },
+            tax_id: dati.partitaIva,
+            email: dati.email,
+            company_name: dati.ragioneSociale,
+            name: dati.ragioneSociale,
+            contact_email: dati.email || 'no-reply@azienda.it',
+            contact_phone: dati.telefono || '',
+            fiscal_id: dati.codiceFiscale,
+            address: dati.indirizzo,
+            receipts: true,
+            fisconline_username: dati.usernameFisconline,
+            fisconline_password: dati.passwordFisconline,
+          },
         {
           headers: {
             Authorization: `Bearer ${OPENAPI_KEY}`,
