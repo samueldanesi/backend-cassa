@@ -32,34 +32,45 @@ app.post('/api/crea-azienda', async (req, res) => {
 
   try {
     const risposta = await axios.post(
-        'https://test.invoice.openapi.com/IT-configurations',
-        {
-            tax_id: dati.partitaIva,
-            email: dati.email,
-            company_name: dati.ragioneSociale,
-            name: dati.ragioneSociale,
-            contact_email: dati.email || 'no-reply@azienda.it',
-            contact_phone: dati.telefono || '',
-            fiscal_id: dati.codiceFiscale,
-            address: dati.indirizzo,
-            receipts: true,
-            fisconline_username: dati.usernameFisconline,
-            fisconline_password: dati.passwordFisconline,
-            fisconline_pin: dati.pinFisconline,
+      'https://test.invoice.openapi.com/IT-configurations',
+      {
+        fiscal_id: dati.partitaIva,
+        name: dati.ragioneSociale,
+        email: dati.email,
+        receipts: true,
+        receipts_authentication: {
+          taxCode: dati.codiceFiscale,
+          password: dati.passwordFisconline,
+          pin: dati.pinFisconline,
+        },
+        api_configurations: [
+          {
+            event: 'receipt',
+            callback: {
+              url: 'https://backend-cassa.onrender.com/receipt'
+            }
           },
-        {
-          headers: {
-            Authorization: `Bearer ${OPENAPI_KEY}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
+          {
+            event: 'receipt-error',
+            callback: {
+              url: 'https://backend-cassa.onrender.com/receipt-error'
+            }
+          }
+        ]
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAPI_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
 
     res.status(200).json({ 
-        success: true, 
-        company_id: risposta.data?.configuration_id || risposta.data?.tax_id || null, 
-        datiOpenapi: risposta.data 
-      });
+      success: true, 
+      company_id: risposta.data?.configuration_id || risposta.data?.tax_id || null, 
+      datiOpenapi: risposta.data 
+    });
   } catch (errore) {
     if (errore.response?.status === 409) {
       return res.status(200).json({ success: true, messaggio: 'Azienda già presente su Openapi' });
@@ -70,56 +81,56 @@ app.post('/api/crea-azienda', async (req, res) => {
   }
 });
 
-// 🧾 INVIO SCONTRINO (versione aggiornata senza company_id)
+// 🧾 INVIO SCONTRINO
 app.post('/api/invia-scontrino', async (req, res) => {
-    const dati = req.body;
-  
-    if (
-        !dati.partitaIva ||
-        !dati.codiceFiscale || dati.codiceFiscale.trim() === '' ||
-        !Array.isArray(dati.prodotti) ||
-        dati.prodotti.length === 0 ||
-        !dati.totale
-      ) {
-      return res.status(400).json({ errore: 'Dati dello scontrino mancanti o incompleti' });
-    }
-  
-    try {
-      const risposta = await axios.post(
-       'https://test.invoice.openapi.com/IT-receipts',
-        {
-          configuration_tax_id: dati.partitaIva,
-          receipt_date: new Date().toISOString().split('T')[0], // data automatica
-          receipt_time: new Date().toISOString().split('T')[1].substring(0, 5), // ora automatica
-          customer_name: dati.intestatario || '',
-          customer_tax_id: dati.codiceFiscale || '',
-          customer_address: dati.indirizzo || '',
-          customer_email: dati.email || '',
-          customer_phone: dati.telefono || '',
-          items: dati.prodotti.map(p => ({
-            description: p.nome,
-            quantity: p.quantita,
-            unit_price: p.prezzo,
-            vat_rate: p.iva,
-          })),
+  const dati = req.body;
+
+  if (
+    !dati.partitaIva ||
+    !dati.codiceFiscale || dati.codiceFiscale.trim() === '' ||
+    !Array.isArray(dati.prodotti) ||
+    dati.prodotti.length === 0 ||
+    !dati.totale
+  ) {
+    return res.status(400).json({ errore: 'Dati dello scontrino mancanti o incompleti' });
+  }
+
+  try {
+    const risposta = await axios.post(
+      'https://test.invoice.openapi.com/IT-receipts',
+      {
+        configuration_tax_id: dati.partitaIva,
+        receipt_date: new Date().toISOString().split('T')[0],
+        receipt_time: new Date().toISOString().split('T')[1].substring(0, 5),
+        customer_name: dati.intestatario || '',
+        customer_tax_id: dati.codiceFiscale || '',
+        customer_address: dati.indirizzo || '',
+        customer_email: dati.email || '',
+        customer_phone: dati.telefono || '',
+        items: dati.prodotti.map(p => ({
+          description: p.nome,
+          quantity: p.quantita,
+          unit_price: p.prezzo,
+          vat_rate: p.iva,
+        })),
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAPI_KEY}`,
+          'Content-Type': 'application/json',
         },
-        {
-          headers: {
-            Authorization: `Bearer ${OPENAPI_KEY}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-  
-      res.status(200).json({ success: true, dati: risposta.data });
-    } catch (errore) {
-      console.error('❌ Errore invio scontrino:', errore.response?.data || errore.message);
-      res.status(500).json({
-        errore: 'Errore durante invio scontrino',
-        dettaglio: errore.response?.data || errore.message,
-      });
-    }
-  });
+      }
+    );
+
+    res.status(200).json({ success: true, dati: risposta.data });
+  } catch (errore) {
+    console.error('❌ Errore invio scontrino:', errore.response?.data || errore.message);
+    res.status(500).json({
+      errore: 'Errore durante invio scontrino',
+      dettaglio: errore.response?.data || errore.message,
+    });
+  }
+});
 
 // 🚀 AVVIO SERVER
 app.listen(PORT, () => {
