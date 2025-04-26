@@ -63,11 +63,12 @@ app.post('/api/invia-scontrino', async (req, res) => {
     const dati = req.body;
   
     if (
-      !dati.partitaIva ||
-      !Array.isArray(dati.prodotti) ||
-      dati.prodotti.length === 0 ||
-      !dati.totale
-    ) {
+        !dati.partitaIva ||
+        !dati.codiceFiscale || dati.codiceFiscale.trim() === '' ||
+        !Array.isArray(dati.prodotti) ||
+        dati.prodotti.length === 0 ||
+        !dati.totale
+      ) {
       return res.status(400).json({ errore: 'Dati dello scontrino mancanti o incompleti' });
     }
   
