@@ -95,14 +95,14 @@ app.post('/api/invia-scontrino', async (req, res) => {
       {
         fiscal_id: dati.partitaIva,
         items: dati.prodotti.map(p => ({
-          quantity: p.quantita,
-          description: p.nome,
-          unit_price: p.prezzo,
-          vat_rate_code: p.iva?.toString() ?? "22", // Codice IVA come stringa
-          discount: 0, // Aggiungi sconto per singolo prodotto se vuoi
-          complimentary: false,
-          sku: p.sku ?? ''
-        })),
+            quantity: p.quantity,
+            description: p.description,
+            unit_price: p.unit_price,
+            vat_rate_code: p.vat_rate_code?.toString() ?? "22",
+            discount: p.discount ?? 0,
+            complimentary: p.complimentary ?? false,
+            sku: p.sku ?? ''
+          })),
         cash_payment_amount: dati.pagamentoContanti ?? dati.totale,
         electronic_payment_amount: dati.pagamentoCarta ?? 0,
         ticket_restaurant_payment_amount: dati.pagamentoTicket ?? 0,
