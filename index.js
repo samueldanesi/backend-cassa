@@ -46,15 +46,11 @@ app.post('/api/crea-azienda', async (req, res) => {
         api_configurations: [
           {
             event: 'receipt',
-            callback: {
-              url: 'https://backend-cassa.onrender.com/receipt'
-            }
+            callback: { url: 'https://backend-cassa.onrender.com/receipt' }
           },
           {
             event: 'receipt-error',
-            callback: {
-              url: 'https://backend-cassa.onrender.com/receipt-error'
-            }
+            callback: { url: 'https://backend-cassa.onrender.com/receipt-error' }
           }
         ]
       },
@@ -81,16 +77,14 @@ app.post('/api/crea-azienda', async (req, res) => {
   }
 });
 
-// 🧾 INVIO SCONTRINO
+// 🧾 INVIO SCONTRINO (NUOVA VERSIONE CORRETTA)
 app.post('/api/invia-scontrino', async (req, res) => {
   const dati = req.body;
 
   if (
     !dati.partitaIva ||
-    !dati.codiceFiscale || dati.codiceFiscale.trim() === '' ||
     !Array.isArray(dati.prodotti) ||
-    dati.prodotti.length === 0 ||
-    !dati.totale
+    dati.prodotti.length === 0
   ) {
     return res.status(400).json({ errore: 'Dati dello scontrino mancanti o incompleti' });
   }
@@ -99,20 +93,27 @@ app.post('/api/invia-scontrino', async (req, res) => {
     const risposta = await axios.post(
       'https://test.invoice.openapi.com/IT-receipts',
       {
-        configuration_tax_id: dati.partitaIva,
-        receipt_date: new Date().toISOString().split('T')[0],
-        receipt_time: new Date().toISOString().split('T')[1].substring(0, 5),
-        customer_name: dati.intestatario || '',
-        customer_tax_id: dati.codiceFiscale || '',
-        customer_address: dati.indirizzo || '',
-        customer_email: dati.email || '',
-        customer_phone: dati.telefono || '',
+        fiscal_id: dati.partitaIva,
         items: dati.prodotti.map(p => ({
-          description: p.nome,
           quantity: p.quantita,
+          description: p.nome,
           unit_price: p.prezzo,
-          vat_rate: p.iva,
+          vat_rate_code: p.iva?.toString() ?? "22", // Codice IVA come stringa
+          discount: 0, // Aggiungi sconto per singolo prodotto se vuoi
+          complimentary: false,
+          sku: p.sku ?? ''
         })),
+        cash_payment_amount: dati.pagamentoContanti ?? dati.totale,
+        electronic_payment_amount: dati.pagamentoCarta ?? 0,
+        ticket_restaurant_payment_amount: dati.pagamentoTicket ?? 0,
+        ticket_restaurant_quantity: dati.numeroTicket ?? 0,
+        goods_uncollected_amount: 0,
+        services_uncollected_amount: 0,
+        invoice_issuing: false,
+        linked_receipt: '',
+        discount: dati.scontoTotale ?? 0,
+        lottery_code: '',
+        tags: []
       },
       {
         headers: {
