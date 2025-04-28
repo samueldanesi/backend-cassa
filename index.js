@@ -110,7 +110,6 @@ app.post('/api/invia-scontrino', async (req, res) => {
         goods_uncollected_amount: 0,
         services_uncollected_amount: 0,
         invoice_issuing: false,
-        linked_receipt: '',
         discount: dati.scontoTotale ?? 0,
         tags: []
       },
