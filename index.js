@@ -120,7 +120,7 @@ app.post('/api/invia-scontrino', async (req, res) => {
         },
       }
     );
-
+    console.log('🧾 Risposta Openapi:', JSON.stringify(risposta.data, null, 2));
     res.status(200).json({ 
         success: true, 
         id: risposta.data?.data?.id ?? null, 
