@@ -112,7 +112,6 @@ app.post('/api/invia-scontrino', async (req, res) => {
         invoice_issuing: false,
         linked_receipt: '',
         discount: dati.scontoTotale ?? 0,
-        lottery_code: '',
         tags: []
       },
       {
