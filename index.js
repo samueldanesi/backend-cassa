@@ -121,7 +121,11 @@ app.post('/api/invia-scontrino', async (req, res) => {
       }
     );
 
-    res.status(200).json({ success: true, dati: risposta.data });
+    res.status(200).json({ 
+        success: true, 
+        id: risposta.data?.data?.id ?? null, 
+        dati: risposta.data 
+      });
   } catch (errore) {
     console.error('❌ Errore invio scontrino:', errore.response?.data || errore.message);
     res.status(500).json({
