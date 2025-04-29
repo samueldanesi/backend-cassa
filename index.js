@@ -132,8 +132,8 @@ app.post('/api/invia-scontrino', async (req, res) => {
       dettaglio: errore.response?.data || errore.message,
     });
   }
-});
-;// ❌ ANNULLA SCONTRINO EMESSO
+})
+// ❌ ANNULLA SCONTRINO EMESSO
   app.post('/api/elimina-scontrino', async (req, res) => {
     const { idOpenapi } = req.body;
   
