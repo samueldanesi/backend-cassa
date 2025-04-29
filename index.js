@@ -133,7 +133,34 @@ app.post('/api/invia-scontrino', async (req, res) => {
     });
   }
 });
-
+;// ❌ ANNULLA SCONTRINO EMESSO
+  app.post('/api/elimina-scontrino', async (req, res) => {
+    const { idOpenapi } = req.body;
+  
+    if (!idOpenapi) {
+      return res.status(400).json({ errore: 'ID Openapi mancante' });
+    }
+  
+    try {
+      const risposta = await axios.delete(
+        `https://test.invoice.openapi.com/IT-receipts/${idOpenapi}`,
+        {
+          headers: {
+            Authorization: `Bearer ${OPENAPI_KEY}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+  
+      return res.status(200).json({ success: true, data: risposta.data });
+    } catch (errore) {
+      console.error('❌ Errore annullamento scontrino:', errore.response?.data || errore.message);
+      return res.status(500).json({
+        errore: 'Errore durante annullamento scontrino',
+        dettaglio: errore.response?.data || errore.message,
+      });
+    }
+  });
 // 🚀 AVVIO SERVER
 app.listen(PORT, () => {
   console.log(`✅ Server PRODUZIONE avviato sulla porta ${PORT}`);
