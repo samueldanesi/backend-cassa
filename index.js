@@ -226,18 +226,27 @@ app.get('/api/scontrini/:fiscal_id', async (req, res) => {
   }
 });
 app.get('/api/azienda/:id', async (req, res) => {
+  const id = req.params.id;
   try {
-    const risposta = await axios.get(`https://test.invoice.openapi.com/IT-configurations/${req.params.id}`, {
-      headers: {
-        Authorization: `Bearer ${OPENAPI_KEY}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    console.log(`🔍 Richiesta dettagli per ID: ${id}`); // ✅ debug visibile da Render logs
 
-    res.json(risposta.data);
-  } catch (errore) {
-    console.error('❌ Errore dettagli azienda:', errore.response?.data || errore.message);
-    res.status(500).json({ errore: 'Errore dettagli azienda', dettaglio: errore.message });
+    const risposta = await axios.get(
+      `https://test.invoice.openapi.com/IT-configurations/${id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAPI_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    res.status(200).json(risposta.data);
+  } catch (e) {
+    console.error('❌ Errore nei dettagli azienda:', e.response?.data || e.message); // ✅ log utile
+    res.status(500).json({ 
+      errore: 'Errore nei dettagli', 
+      dettaglio: e.response?.data || e.message 
+    });
   }
 });
 // 🚀 AVVIO SERVER
