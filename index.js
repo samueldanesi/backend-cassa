@@ -164,7 +164,7 @@ app.post('/api/invia-scontrino', async (req, res) => {
   });
  // ✅ Recupera configurazioni aziende da OpenAPI
  // ✅ Nuova rotta per recuperare le aziende configurate
-app.get('/api/utenti-configurati', async (req, res) => {
+ app.get('/api/utenti-configurati', async (req, res) => {
   try {
     const risposta = await axios.get(
       'https://test.invoice.openapi.com/IT-configurations',
@@ -176,8 +176,7 @@ app.get('/api/utenti-configurati', async (req, res) => {
       }
     );
 
-    // ✅ Restituisce SOLO la lista
-    res.status(200).json(risposta.data.data);
+    res.status(200).json(risposta.data.data); // attenzione: solo .data.data
   } catch (errore) {
     console.error('❌ Errore recupero configurazioni:', errore.response?.data || errore.message);
     res.status(500).json({
