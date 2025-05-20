@@ -80,6 +80,7 @@ app.post('/api/crea-azienda', async (req, res) => {
 // 🧾 INVIO SCONTRINO (NUOVA VERSIONE CORRETTA)
 app.post('/api/invia-scontrino', async (req, res) => {
   const dati = req.body;
+  const codiceLotteria = dati.codice_lotteria || null; // ✅ AGGIUNTA
 
   if (
     !dati.partitaIva ||
@@ -95,14 +96,14 @@ app.post('/api/invia-scontrino', async (req, res) => {
       {
         fiscal_id: dati.partitaIva,
         items: dati.prodotti.map(p => ({
-            quantity: p.quantity,
-            description: p.description,
-            unit_price: p.unit_price,
-            vat_rate_code: p.vat_rate_code?.toString() ?? "22",
-            discount: p.discount ?? 0,
-            complimentary: p.complimentary ?? false,
-            sku: p.sku ?? ''
-          })),
+          quantity: p.quantity,
+          description: p.description,
+          unit_price: p.unit_price,
+          vat_rate_code: p.vat_rate_code?.toString() ?? "22",
+          discount: p.discount ?? 0,
+          complimentary: p.complimentary ?? false,
+          sku: p.sku ?? ''
+        })),
         cash_payment_amount: dati.pagamentoContanti ?? dati.totale,
         electronic_payment_amount: dati.pagamentoCarta ?? 0,
         ticket_restaurant_payment_amount: dati.pagamentoTicket ?? 0,
@@ -110,7 +111,7 @@ app.post('/api/invia-scontrino', async (req, res) => {
         goods_uncollected_amount: 0,
         services_uncollected_amount: 0,
         invoice_issuing: false,
-        tags: []
+        tags: codiceLotteria ? [`codice_lotteria:${codiceLotteria}`] : [] // ✅ OPZIONALE
       },
       {
         headers: {
@@ -161,6 +162,30 @@ app.post('/api/invia-scontrino', async (req, res) => {
       });
     }
   });
+ // ✅ Recupera configurazioni aziende da OpenAPI
+ // ✅ Nuova rotta per recuperare le aziende configurate
+app.get('/api/utenti-configurati', async (req, res) => {
+  try {
+    const risposta = await axios.get(
+      'https://test.invoice.openapi.com/IT-configurations',
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAPI_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    // ✅ Restituisce SOLO la lista
+    res.status(200).json(risposta.data.data);
+  } catch (errore) {
+    console.error('❌ Errore recupero configurazioni:', errore.response?.data || errore.message);
+    res.status(500).json({
+      errore: 'Errore nel recupero configurazioni',
+      dettaglio: errore.response?.data || errore.message,
+    });
+  }
+});
 // 🚀 AVVIO SERVER
 app.listen(PORT, () => {
   console.log(`✅ Server PRODUZIONE avviato sulla porta ${PORT}`);
