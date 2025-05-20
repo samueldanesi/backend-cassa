@@ -204,24 +204,25 @@ app.get('/api/scontrini/:fiscal_id', async (req, res) => {
     res.status(500).json({ errore: 'Errore nel recupero scontrini', dettaglio: errore.message });
   }
 });
-app.delete('/api/elimina-azienda/:id', async (req, res) => {
-  const id = req.params.id;
+app.get('/api/scontrini/:fiscal_id', async (req, res) => {
+  const { fiscal_id } = req.params;
 
   try {
-    const risposta = await axios.delete(
-      `https://test.invoice.openapi.com/IT-configurations/${id}`,
-      {
-        headers: {
-          Authorization: `Bearer ${OPENAPI_KEY}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const risposta = await axios.get(`https://test.invoice.openapi.com/IT-receipts`, {
+      params: { fiscal_id },
+      headers: {
+        Authorization: `Bearer ${OPENAPI_KEY}`,
+        'Content-Type': 'application/json',
+      },
+    });
 
-    res.status(200).json({ success: true, messaggio: 'Azienda disattivata' });
+    res.status(200).json(risposta.data.data);
   } catch (errore) {
-    console.error('❌ Errore eliminazione azienda:', errore.response?.data || errore.message);
-    res.status(500).json({ errore: 'Errore durante eliminazione', dettaglio: errore.message });
+    console.error('❌ Errore recupero scontrini:', errore.response?.data || errore.message);
+    res.status(500).json({
+      errore: 'Errore nel recupero scontrini',
+      dettaglio: errore.response?.data || errore.message,
+    });
   }
 });
 app.get('/api/azienda/:id', async (req, res) => {
