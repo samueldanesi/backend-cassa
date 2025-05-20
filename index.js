@@ -184,6 +184,63 @@ app.get('/api/utenti-configurati', async (req, res) => {
     });
   }
 });
+// ✅ Ottieni tutti gli scontrini per una data azienda
+app.get('/api/scontrini/:fiscal_id', async (req, res) => {
+  const fiscalId = req.params.fiscal_id;
+
+  try {
+    const risposta = await axios.get(
+      `https://test.invoice.openapi.com/IT-receipts?fiscal_id=${fiscalId}`,
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAPI_KEY}`,
+          'Content-Type': 'application/json',
+        }
+      }
+    );
+    res.json(risposta.data.data);
+  } catch (errore) {
+    console.error('❌ Errore nel recupero scontrini:', errore.message);
+    res.status(500).json({ errore: 'Errore nel recupero scontrini', dettaglio: errore.message });
+  }
+});
+app.delete('/api/elimina-azienda/:id', async (req, res) => {
+  const id = req.params.id;
+
+  try {
+    const risposta = await axios.delete(
+      `https://test.invoice.openapi.com/IT-configurations/${id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAPI_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    res.status(200).json({ success: true, messaggio: 'Azienda disattivata' });
+  } catch (errore) {
+    console.error('❌ Errore eliminazione azienda:', errore.response?.data || errore.message);
+    res.status(500).json({ errore: 'Errore durante eliminazione', dettaglio: errore.message });
+  }
+});
+app.get('/api/azienda/:id', async (req, res) => {
+  const id = req.params.id;
+  try {
+    const risposta = await axios.get(
+      `https://test.invoice.openapi.com/IT-configurations/${id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAPI_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+    res.status(200).json(risposta.data);
+  } catch (e) {
+    res.status(500).json({ errore: 'Errore nei dettagli', dettaglio: e.message });
+  }
+});
 // 🚀 AVVIO SERVER
 app.listen(PORT, () => {
   console.log(`✅ Server PRODUZIONE avviato sulla porta ${PORT}`);
