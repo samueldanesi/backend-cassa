@@ -249,6 +249,30 @@ app.get('/api/azienda/:id', async (req, res) => {
     });
   }
 });
+// ✅ Elimina (disattiva) un'azienda configurata
+app.delete('/api/elimina-azienda/:id', async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const risposta = await axios.delete(
+      `https://test.invoice.openapi.com/IT-configurations/${id}`,
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAPI_KEY}`,
+          'Content-Type': 'application/json',
+        }
+      }
+    );
+
+    res.status(200).json({ success: true, data: risposta.data });
+  } catch (errore) {
+    console.error('❌ Errore eliminazione azienda:', errore.response?.data || errore.message);
+    res.status(500).json({
+      errore: 'Errore durante l\'eliminazione',
+      dettaglio: errore.response?.data || errore.message,
+    });
+  }
+});
 // 🚀 AVVIO SERVER
 app.listen(PORT, () => {
   console.log(`✅ Server PRODUZIONE avviato sulla porta ${PORT}`);
