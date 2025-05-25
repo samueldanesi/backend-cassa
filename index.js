@@ -290,6 +290,27 @@ app.post('/api/disattiva-scontrini/:fiscal_id', async (req, res) => {
     });
   }
 });
+app.post('/api/attiva-scontrini/:fiscal_id', async (req, res) => {
+  const fiscalId = req.params.fiscal_id;
+
+  try {
+    const risposta = await axios.patch(
+      `https://test.invoice.openapi.com/IT-configurations/${fiscalId}`,
+      { receipts: true }, // ✅ Rende di nuovo attivo l'invio
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAPI_KEY}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    return res.status(200).json({ success: true, message: 'Scontrini riattivati' });
+  } catch (errore) {
+    console.error('❌ Errore riattivazione:', errore.response?.data || errore.message);
+    res.status(500).json({ errore: 'Errore durante riattivazione', dettaglio: errore.message });
+  }
+});
 // 🚀 AVVIO SERVER
 app.listen(PORT, () => {
   console.log(`✅ Server PRODUZIONE avviato sulla porta ${PORT}`);
