@@ -7,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-const OPENAPI_KEY = '680a692f17e7399b1404f3fa'; // ✅ Chiave di PRODUZIONE Openapi
+const OPENAPI_KEY = '6832e7b00af61204d2092f68'; // ✅ Chiave di PRODUZIONE Openapi
 
 // 🔍 ROUTE DI TEST
 app.get('/', (req, res) => {
