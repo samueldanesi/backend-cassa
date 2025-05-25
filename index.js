@@ -292,11 +292,23 @@ app.post('/api/disattiva-scontrini/:fiscal_id', async (req, res) => {
 });
 app.post('/api/attiva-scontrini/:fiscal_id', async (req, res) => {
   const fiscalId = req.params.fiscal_id;
+  const { taxCode, password, pin } = req.body; // 👈 ricevi i dati
+
+  if (!taxCode || !password || !pin) {
+    return res.status(400).json({ errore: 'Dati Fisconline mancanti' });
+  }
 
   try {
     const risposta = await axios.patch(
       `https://test.invoice.openapi.com/IT-configurations/${fiscalId}`,
-      { receipts: true }, // ✅ Rende di nuovo attivo l'invio
+      {
+        receipts: true,
+        receipts_authentication: {
+          taxCode,
+          password,
+          pin
+        }
+      },
       {
         headers: {
           Authorization: `Bearer ${OPENAPI_KEY}`,
@@ -308,7 +320,10 @@ app.post('/api/attiva-scontrini/:fiscal_id', async (req, res) => {
     return res.status(200).json({ success: true, message: 'Scontrini riattivati' });
   } catch (errore) {
     console.error('❌ Errore riattivazione:', errore.response?.data || errore.message);
-    res.status(500).json({ errore: 'Errore durante riattivazione', dettaglio: errore.message });
+    res.status(500).json({
+      errore: 'Errore durante riattivazione',
+      dettaglio: errore.response?.data || errore.message
+    });
   }
 });
 // 🚀 AVVIO SERVER
