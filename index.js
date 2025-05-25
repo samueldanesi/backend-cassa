@@ -76,9 +76,21 @@ app.post('/api/crea-azienda', async (req, res) => {
     res.status(500).json({ errore: 'Errore durante creazione azienda', dettaglio: errore.message });
   }
 });
+function bloccaAziendeDisattivate(req, res, next) {
+  const fiscalId = req.body.partitaIva;
 
+  if (!fiscalId) {
+    return res.status(400).json({ errore: 'Partita IVA mancante' });
+  }
+
+  if (aziendeDisattivate.has(fiscalId)) {
+    return res.status(403).json({ errore: 'Azienda disattivata per morosità' });
+  }
+
+  next(); // altrimenti prosegui
+}
 // 🧾 INVIO SCONTRINO (NUOVA VERSIONE CORRETTA)
-app.post('/api/invia-scontrino', async (req, res) => {
+app.post('/api/invia-scontrino', bloccaAziendeDisattivate, async (req, res) => {
   const dati = req.body;
   const codiceLotteria = dati.codice_lotteria || null; // ✅ AGGIUNTA
 
@@ -225,13 +237,12 @@ app.get('/api/scontrini/:fiscal_id', async (req, res) => {
     });
   }
 });
-app.get('/api/azienda/:id', async (req, res) => {
-  const id = req.params.id;
-  try {
-    console.log(`🔍 Richiesta dettagli per ID: ${id}`); // ✅ debug visibile da Render logs
+app.get('/api/azienda/:fiscal_id', async (req, res) => {
+  const fiscalId = req.params.fiscal_id;
 
+  try {
     const risposta = await axios.get(
-      `https://test.invoice.openapi.com/IT-configurations/${id}`,
+      `https://test.invoice.openapi.com/IT-configurations/${fiscalId}`,
       {
         headers: {
           Authorization: `Bearer ${OPENAPI_KEY}`,
@@ -242,34 +253,40 @@ app.get('/api/azienda/:id', async (req, res) => {
 
     res.status(200).json(risposta.data);
   } catch (e) {
-    console.error('❌ Errore nei dettagli azienda:', e.response?.data || e.message); // ✅ log utile
-    res.status(500).json({ 
-      errore: 'Errore nei dettagli', 
-      dettaglio: e.response?.data || e.message 
+    console.error('❌ Errore nei dettagli azienda:', e.response?.data || e.message);
+    res.status(500).json({
+      errore: 'Errore nei dettagli',
+      dettaglio: e.response?.data || e.message,
     });
   }
 });
-// ✅ Elimina (disattiva) un'azienda configurata
-app.delete('/api/elimina-azienda/:id', async (req, res) => {
-  const { id } = req.params;
+
+// Elenco temporaneo di aziende disattivate (usa fiscal_id)
+const aziendeDisattivate = new Set([
+  '04657834459', // esempio
+  '12345678901'  // altro esempio
+]);
+app.post('/api/disattiva-scontrini/:fiscal_id', async (req, res) => {
+  const { fiscal_id } = req.params;
 
   try {
-    const risposta = await axios.delete(
-      `https://test.invoice.openapi.com/IT-configurations/${id}`,
+    const risposta = await axios.patch(
+      `https://test.invoice.openapi.com/IT-configurations/${fiscal_id}`,
+      { receipts: false }, // 👈 disattiva l'invio scontrini
       {
         headers: {
           Authorization: `Bearer ${OPENAPI_KEY}`,
           'Content-Type': 'application/json',
-        }
+        },
       }
     );
 
     res.status(200).json({ success: true, data: risposta.data });
-  } catch (errore) {
-    console.error('❌ Errore eliminazione azienda:', errore.response?.data || errore.message);
+  } catch (e) {
+    console.error('❌ Errore disattivazione:', e.response?.data || e.message);
     res.status(500).json({
-      errore: 'Errore durante l\'eliminazione',
-      dettaglio: errore.response?.data || errore.message,
+      errore: 'Errore disattivazione',
+      dettaglio: e.response?.data || e.message,
     });
   }
 });
