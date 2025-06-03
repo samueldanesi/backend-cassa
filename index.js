@@ -9,12 +9,33 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const OPENAPI_KEY = '6832e7b00af61204d2092f68'; // ✅ Chiave di PRODUZIONE Openapi
 
-// 🔍 ROUTE DI TEST
+// Middleware (incluso per contesto, assicurati che aziendeDisattivate sia definito correttamente nel tuo ambiente)
+// Elenco temporaneo di aziende disattivate (usa fiscal_id) - SPOSTA QUESTA DEFINIZIONE PIÙ IN ALTO O IN UN MODULO SEPARATO
+const aziendeDisattivate = new Set([
+  '04657834459', // esempio
+  '12345678901'  // altro esempio
+]);
+
+function bloccaAziendeDisattivate(req, res, next) {
+  const fiscalId = req.body.partitaIva;
+
+  if (!fiscalId) {
+    return res.status(400).json({ errore: 'Partita IVA mancante' });
+  }
+
+  if (aziendeDisattivate.has(fiscalId)) {
+    return res.status(403).json({ errore: 'Azienda disattivata per morosità' });
+  }
+
+  next(); // altrimenti prosegui
+}
+
+// 🔍 ROUTE DI TEST (invariata)
 app.get('/', (req, res) => {
   res.send('✅ Backend PRODUZIONE attivo e funzionante!');
 });
 
-// 🏢 CREAZIONE CONFIGURAZIONE AZIENDA
+// 🏢 CREAZIONE CONFIGURAZIONE AZIENDA (invariata)
 app.post('/api/crea-azienda', async (req, res) => {
   const dati = req.body;
 
@@ -76,23 +97,12 @@ app.post('/api/crea-azienda', async (req, res) => {
     res.status(500).json({ errore: 'Errore durante creazione azienda', dettaglio: errore.message });
   }
 });
-function bloccaAziendeDisattivate(req, res, next) {
-  const fiscalId = req.body.partitaIva;
 
-  if (!fiscalId) {
-    return res.status(400).json({ errore: 'Partita IVA mancante' });
-  }
 
-  if (aziendeDisattivate.has(fiscalId)) {
-    return res.status(403).json({ errore: 'Azienda disattivata per morosità' });
-  }
-
-  next(); // altrimenti prosegui
-}
-// 🧾 INVIO SCONTRINO (NUOVA VERSIONE CORRETTA)
+// 🧾 INVIO SCONTRINO (CON LOGICA items MODIFICATA)
 app.post('/api/invia-scontrino', bloccaAziendeDisattivate, async (req, res) => {
   const dati = req.body;
-  const codiceLotteria = dati.codice_lotteria || null; // ✅ AGGIUNTA
+  const codiceLotteria = dati.codice_lotteria || null;
 
   if (
     !dati.partitaIva ||
@@ -103,28 +113,42 @@ app.post('/api/invia-scontrino', bloccaAziendeDisattivate, async (req, res) => {
   }
 
   try {
+    const payloadPerOpenAPI = { // Costruiamo l'intero payload qui
+      fiscal_id: dati.partitaIva,
+      items: dati.prodotti.map(p => {
+        // Definisci l'oggetto base per l'item
+        const itemData = {
+          quantity: p.quantity, // Assumiamo che Flutter invii un numero valido
+          description: p.description ?? '', // Default a stringa vuota se mancante
+          unit_price: parseFloat(p.unit_price) || 0, // Assicura sia un numero, default a 0
+          vat_rate_code: p.vat_rate_code?.toString() ?? "22", // Default a "22" se mancante (Flutter dovrebbe fornirlo)
+          complimentary: p.complimentary === true, // Converte a booleano stretto, default a false se mancante/null
+          sku: p.sku ?? '' // Default a stringa vuota se mancante
+        };
+
+        // Aggiungi il campo 'discount' solo se è fornito dal frontend Flutter
+        // ed è diverso da null. Se Flutter invia 'null' (es. per la nota a prezzo zero),
+        // questo campo non verrà incluso nell'oggetto 'itemData' inviato a Openapi.
+        if (p.discount !== null && p.discount !== undefined) {
+          itemData.discount = parseFloat(p.discount); // Assicura sia un numero
+        }
+        // Altrimenti (se p.discount è null o undefined), il campo 'discount' non viene aggiunto a itemData.
+        
+        return itemData;
+      }),
+      cash_payment_amount: dati.pagamentoContanti ?? dati.totale,
+      electronic_payment_amount: dati.pagamentoCarta ?? 0,
+      ticket_restaurant_payment_amount: dati.pagamentoTicket ?? 0,
+      ticket_restaurant_quantity: dati.numeroTicket ?? 0,
+      goods_uncollected_amount: 0,
+      services_uncollected_amount: 0,
+      invoice_issuing: false,
+      tags: codiceLotteria ? [`codice_lotteria:${codiceLotteria}`] : []
+    };
+
     const risposta = await axios.post(
       'https://test.invoice.openapi.com/IT-receipts',
-      {
-        fiscal_id: dati.partitaIva,
-        items: dati.prodotti.map(p => ({
-          quantity: p.quantity,
-          description: p.description,
-          unit_price: p.unit_price,
-          vat_rate_code: p.vat_rate_code?.toString() ?? "22",
-          discount: p.discount ?? 0,
-          complimentary: p.complimentary ?? false,
-          sku: p.sku ?? ''
-        })),
-        cash_payment_amount: dati.pagamentoContanti ?? dati.totale,
-        electronic_payment_amount: dati.pagamentoCarta ?? 0,
-        ticket_restaurant_payment_amount: dati.pagamentoTicket ?? 0,
-        ticket_restaurant_quantity: dati.numeroTicket ?? 0,
-        goods_uncollected_amount: 0,
-        services_uncollected_amount: 0,
-        invoice_issuing: false,
-        tags: codiceLotteria ? [`codice_lotteria:${codiceLotteria}`] : [] // ✅ OPZIONALE
-      },
+      payloadPerOpenAPI, // Usa il payload costruito
       {
         headers: {
           Authorization: `Bearer ${OPENAPI_KEY}`,
@@ -132,6 +156,7 @@ app.post('/api/invia-scontrino', bloccaAziendeDisattivate, async (req, res) => {
         },
       }
     );
+
     console.log('🧾 Risposta Openapi:', JSON.stringify(risposta.data, null, 2));
     res.status(200).json({ 
         success: true, 
@@ -140,13 +165,24 @@ app.post('/api/invia-scontrino', bloccaAziendeDisattivate, async (req, res) => {
       });
   } catch (errore) {
     console.error('❌ Errore invio scontrino:', errore.response?.data || errore.message);
-    res.status(500).json({
-      errore: 'Errore durante invio scontrino',
-      dettaglio: errore.response?.data || errore.message,
+    // Migliorata la gestione del messaggio di errore per includere dettagli dal backend Openapi
+    const statusErrore = errore.response?.status || 500;
+    let messaggioDettaglio = errore.message;
+    if (errore.response?.data) {
+        if (typeof errore.response.data === 'object' && errore.response.data !== null) {
+            messaggioDettaglio = errore.response.data.message || errore.response.data.errore || JSON.stringify(errore.response.data);
+        } else {
+            messaggioDettaglio = errore.response.data.toString();
+        }
+    }
+    res.status(statusErrore).json({
+      errore: `Errore durante invio scontrino (Openapi status: ${statusErrore})`,
+      dettaglio: messaggioDettaglio,
     });
   }
-})
-// ❌ ANNULLA SCONTRINO EMESSO
+});
+
+// ❌ ANNULLA SCONTRINO EMESSO (invariata)
 app.post('/api/elimina-scontrino', async (req, res) => {
   const { idOpenapi } = req.body;
 
@@ -179,7 +215,8 @@ app.post('/api/elimina-scontrino', async (req, res) => {
     });
   }
 });
- // ✅ Recupera configurazioni aziende da OpenAPI
+
+// ✅ Recupera configurazioni aziende da OpenAPI (invariata)
 app.get('/api/utenti-configurati', async (req, res) => {
   try {
     const risposta = await axios.get(
@@ -201,39 +238,21 @@ app.get('/api/utenti-configurati', async (req, res) => {
     });
   }
 });
-// ✅ Ottieni tutti gli scontrini per una data azienda
-app.get('/api/scontrini/:fiscal_id', async (req, res) => {
-  const fiscalId = req.params.fiscal_id;
 
-  try {
-    const risposta = await axios.get(
-      `https://test.invoice.openapi.com/IT-receipts?fiscal_id=${fiscalId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${OPENAPI_KEY}`,
-          'Content-Type': 'application/json',
-        }
-      }
-    );
-    res.json(risposta.data.data);
-  } catch (errore) {
-    console.error('❌ Errore nel recupero scontrini:', errore.message);
-    res.status(500).json({ errore: 'Errore nel recupero scontrini', dettaglio: errore.message });
-  }
-});
+// ✅ Ottieni tutti gli scontrini per una data azienda (avevi due definizioni, ne tengo una)
 app.get('/api/scontrini/:fiscal_id', async (req, res) => {
-  const { fiscal_id } = req.params;
+  const { fiscal_id } = req.params; // Usa destructuring coerentemente
 
   try {
     const risposta = await axios.get(`https://test.invoice.openapi.com/IT-receipts`, {
-      params: { fiscal_id },
+      params: { fiscal_id }, // Invia fiscal_id come query parameter
       headers: {
         Authorization: `Bearer ${OPENAPI_KEY}`,
         'Content-Type': 'application/json',
       },
     });
 
-    res.status(200).json(risposta.data.data);
+    res.status(200).json(risposta.data.data); // OpenAPI di solito ha i dati in 'data.data' per le liste
   } catch (errore) {
     console.error('❌ Errore recupero scontrini:', errore.response?.data || errore.message);
     res.status(500).json({
@@ -242,6 +261,8 @@ app.get('/api/scontrini/:fiscal_id', async (req, res) => {
     });
   }
 });
+
+// ✅ Ottieni dettagli azienda (invariata)
 app.get('/api/azienda/:fiscal_id', async (req, res) => {
   const fiscalId = req.params.fiscal_id;
 
@@ -266,18 +287,15 @@ app.get('/api/azienda/:fiscal_id', async (req, res) => {
   }
 });
 
-// Elenco temporaneo di aziende disattivate (usa fiscal_id)
-const aziendeDisattivate = new Set([
-  '04657834459', // esempio
-  '12345678901'  // altro esempio
-]);
+
+// ✅ Disattiva scontrini (invariata)
 app.post('/api/disattiva-scontrini/:fiscal_id', async (req, res) => {
   const { fiscal_id } = req.params;
 
   try {
     const risposta = await axios.patch(
       `https://test.invoice.openapi.com/IT-configurations/${fiscal_id}`,
-      { receipts: false }, // 👈 disattiva l'invio scontrini
+      { receipts: false }, 
       {
         headers: {
           Authorization: `Bearer ${OPENAPI_KEY}`,
@@ -295,9 +313,11 @@ app.post('/api/disattiva-scontrini/:fiscal_id', async (req, res) => {
     });
   }
 });
+
+// ✅ Attiva scontrini (invariata)
 app.post('/api/attiva-scontrini/:fiscal_id', async (req, res) => {
   const fiscalId = req.params.fiscal_id;
-  const { taxCode, password, pin } = req.body; // 👈 ricevi i dati
+  const { taxCode, password, pin } = req.body; 
 
   if (!taxCode || !password || !pin) {
     return res.status(400).json({ errore: 'Dati Fisconline mancanti' });
@@ -331,7 +351,9 @@ app.post('/api/attiva-scontrini/:fiscal_id', async (req, res) => {
     });
   }
 });
-// 🚀 AVVIO SERVER
+
+
+// 🚀 AVVIO SERVER (invariato)
 app.listen(PORT, () => {
   console.log(`✅ Server PRODUZIONE avviato sulla porta ${PORT}`);
 });
