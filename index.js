@@ -168,19 +168,48 @@ app.post('/api/crea-azienda', async (req, res) => {
 
       // Log per debuggare il payload degli items effettivamente inviato a Openapi
       console.log("Items EFFETTIVAMENTE inviati a Openapi (dopo filtro):", JSON.stringify(itemsMappatiPerOpenAPI, null, 2));
+// Calcolo coerente dei pagamenti
+const totale = parseFloat(dati.totale) || 0;
+let cash = parseFloat(dati.pagamentoContanti) || 0;
+let electronic = parseFloat(dati.pagamentoCarta) || 0;
+let ticket = parseFloat(dati.pagamentoTicket) || 0;
 
+let sommaPagamenti = cash + electronic + ticket;
+
+// Se c'è una discrepanza, correggiamo il campo electronic o ticket
+if (sommaPagamenti < totale) {
+  const differenza = parseFloat((totale - sommaPagamenti).toFixed(2));
+  // Aggiungiamo alla parte elettronica se già presente, altrimenti a contanti
+  if (electronic > 0) {
+    electronic += differenza;
+  } else if (cash > 0) {
+    cash += differenza;
+  } else {
+    ticket += differenza;
+  }
+} else if (sommaPagamenti > totale) {
+  const eccedenza = parseFloat((sommaPagamenti - totale).toFixed(2));
+  // Proviamo a rimuovere prima da ticket, poi da electronic, poi da cash
+  if (ticket >= eccedenza) {
+    ticket -= eccedenza;
+  } else if (electronic >= eccedenza) {
+    electronic -= eccedenza;
+  } else {
+    cash -= eccedenza;
+  }
+}
       const payloadCompletoPerOpenAPI = {
-        fiscal_id: dati.partitaIva,
-        items: itemsMappatiPerOpenAPI, // Usa la lista filtrata e mappata
-        cash_payment_amount: parseFloat(dati.pagamentoContanti) || parseFloat(dati.totale) || 0,
-        electronic_payment_amount: parseFloat(dati.pagamentoCarta) || 0,
-        ticket_restaurant_payment_amount: parseFloat(dati.pagamentoTicket) || 0,
-        ticket_restaurant_quantity: Number(dati.numeroTicket) || 0,
-        goods_uncollected_amount: 0, 
-        services_uncollected_amount: 0,
-        invoice_issuing: false,
-        tags: codiceLotteria ? [`codice_lotteria:${codiceLotteria}`] : []
-      };
+  fiscal_id: dati.partitaIva,
+  items: itemsMappatiPerOpenAPI,
+  cash_payment_amount: parseFloat(cash.toFixed(2)),
+  electronic_payment_amount: parseFloat(electronic.toFixed(2)),
+  ticket_restaurant_payment_amount: parseFloat(ticket.toFixed(2)),
+  ticket_restaurant_quantity: Number(dati.numeroTicket) || 0,
+  goods_uncollected_amount: 0,
+  services_uncollected_amount: 0,
+  invoice_issuing: false,
+  tags: codiceLotteria ? [`codice_lotteria:${codiceLotteria}`] : []
+};
       
       // console.log("Payload COMPLETO inviato a Openapi:", JSON.stringify(payloadCompletoPerOpenAPI, null, 2));
 
