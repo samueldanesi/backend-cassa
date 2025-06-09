@@ -198,6 +198,10 @@ if (sommaPagamenti < totale) {
     cash -= eccedenza;
   }
 }
+// Se è stato pagato qualcosa con ticket ma la quantità è zero o mancante, impostala a 1 per compatibilità OpenAPI
+if (ticket > 0 && (!dati.numeroTicket || Number(dati.numeroTicket) <= 0)) {
+  dati.numeroTicket = 1;
+}
       const payloadCompletoPerOpenAPI = {
   fiscal_id: dati.partitaIva,
   items: itemsMappatiPerOpenAPI,
