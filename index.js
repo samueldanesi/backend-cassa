@@ -99,167 +99,155 @@ app.post('/api/crea-azienda', async (req, res) => {
 });
 
 
-// 🧾 INVIO SCONTRINO (CON LOGICA items MODIFICATA)
-   app.post('/api/invia-scontrino', bloccaAziendeDisattivate, async (req, res) => {
-    const dati = req.body; // Dati inviati dal frontend Flutter
-    const codiceLotteria = dati.codice_lotteria || null;
+// 🧾 INVIO SCONTRINO (CON LOGICA items E PAGAMENTI MODIFICATA)
+app.post('/api/invia-scontrino', bloccaAziendeDisattivate, async (req, res) => {
+  const dati = req.body; // Dati inviati dal frontend Flutter
+  const codiceLotteria = dati.codice_lotteria || null;
+  // NUOVA: Ricevi la modalità di pagamento dal frontend
+  const modalitaPagamentoFrontend = dati.modalitaPagamento;
 
-    if (
-      !dati.partitaIva ||
-      !Array.isArray(dati.prodotti) ||
-      // Non controlliamo più dati.prodotti.length === 0 qui,
-      // perché potremmo avere solo note che verranno filtrate.
-      // Il controllo se itemsPerOpenAPI è vuoto avverrà dopo.
-      dati.prodotti.length === 0 // Manteniamo questo controllo per scontrini Flutter completamente vuoti
-    ) {
-      return res.status(400).json({ errore: 'Dati dello scontrino mancanti o incompleti (nessun prodotto)' });
+  if (
+    !dati.partitaIva ||
+    !Array.isArray(dati.prodotti) ||
+    dati.prodotti.length === 0
+  ) {
+    return res.status(400).json({ errore: 'Dati dello scontrino mancanti o incompleti (nessun prodotto)' });
+  }
+
+  try {
+    // Filtra gli item: escludi quelli con unit_price === 0 (es. le note)
+    const prodottiFiltratiPerOpenAPI = dati.prodotti.filter(p => {
+      const unitPrice = parseFloat(p.unit_price) || 0;
+      if (unitPrice === 0) {
+        console.log(`INFO: Articolo "${p.description}" con prezzo 0 filtrato, non verrà inviato a Openapi.`);
+        return false; // Escludi questo item
+      }
+      return true; // Mantieni questo item
+    });
+
+    if (dati.prodotti.length > 0 && prodottiFiltratiPerOpenAPI.length === 0) {
+      console.warn('Attenzione: Tutti gli articoli sono stati filtrati (prezzo zero). Nessun item verrà inviato a Openapi.');
+      return res.status(200).json({
+        success: true,
+        id: null,
+        messaggio: 'Scontrino locale salvato. Nessun articolo inviabile a Openapi (solo note o item a prezzo zero).',
+        dati: null
+      });
     }
 
-    try {
-      // Filtra gli item: escludi quelli con unit_price === 0 (es. le note)
-      const prodottiFiltratiPerOpenAPI = dati.prodotti.filter(p => {
-        const unitPrice = parseFloat(p.unit_price) || 0;
-        if (unitPrice === 0) {
-          console.log(`INFO: Articolo "${p.description}" con prezzo 0 filtrato, non verrà inviato a Openapi.`);
-          return false; // Escludi questo item
-        }
-        return true; // Mantieni questo item
-      });
+    // Mappa gli item filtrati per il payload di Openapi
+    const itemsMappatiPerOpenAPI = prodottiFiltratiPerOpenAPI.map(p => {
+      const itemData = {
+        quantity: Number(p.quantity) || 1,
+        description: p.description ?? '',
+        unit_price: parseFloat(p.unit_price),
+        vat_rate_code: p.vat_rate_code?.toString() ?? "22",
+        complimentary: p.complimentary === true,
+        sku: p.sku ?? ''
+      };
 
-      // Se, dopo il filtro, la lista degli item da inviare a Openapi è vuota,
-      // ma lo scontrino originale del frontend non era vuoto (cioè conteneva solo note/item a prezzo zero),
-      // dobbiamo decidere come procedere. Openapi potrebbe non accettare un array 'items' vuoto.
-      if (dati.prodotti.length > 0 && prodottiFiltratiPerOpenAPI.length === 0) {
-        console.warn('Attenzione: Tutti gli articoli sono stati filtrati (prezzo zero). Nessun item verrà inviato a Openapi.');
-        // Opzione 1: Inviare successo parziale, lo scontrino locale è salvato ma nulla è andato a Openapi.
-        return res.status(200).json({ 
-          success: true, // Successo per l'operazione locale
-          id: null,      // Nessun ID da Openapi
-          messaggio: 'Scontrino locale salvato. Nessun articolo inviabile a Openapi (solo note o item a prezzo zero).',
-          dati: null 
-        });
-        // Opzione 2: Considerarlo un errore se si suppone che qualcosa debba sempre andare a Openapi.
-        // return res.status(400).json({ errore: 'Lo scontrino contiene solo articoli a prezzo zero non inviabili a Openapi.' });
-      }
+      itemData.discount = parseFloat(p.discount) || 0;
 
-      // Mappa gli item filtrati per il payload di Openapi
-      const itemsMappatiPerOpenAPI = prodottiFiltratiPerOpenAPI.map(p => {
-        // Ora che gli item a prezzo zero sono esclusi, p.unit_price è > 0.
-        // Il frontend Flutter è responsabile di inviare il discount corretto per questi item:
-        // - Per sconti 100% (prezzo > 0): Flutter invia discount = prezzo_originale - 0.01
-        // - Per nessun sconto (prezzo > 0): Flutter invia discount = 0.0
-        // - Per sconti parziali (prezzo > 0): Flutter invia il discount calcolato
-        
-        const itemData = {
-          quantity: Number(p.quantity) || 1,
-          description: p.description ?? '',   
-          unit_price: parseFloat(p.unit_price), // Garantito > 0 a causa del filtro
-          vat_rate_code: p.vat_rate_code?.toString() ?? "22", // Fallback, Flutter dovrebbe fornire il corretto
-          complimentary: p.complimentary === true, 
-          sku: p.sku ?? '' 
-        };
+      return itemData;
+    });
 
-        // Includi sempre il campo discount, prendendo il valore da Flutter (o default a 0).
-        // Il frontend Flutter gestisce il caso "prezzo - 0.01" per sconti 100%.
-        itemData.discount = parseFloat(p.discount) || 0;
-        
-        return itemData;
-      });
+    console.log("Items EFFETTIVAMENTE inviati a Openapi (dopo filtro):", JSON.stringify(itemsMappatiPerOpenAPI, null, 2));
 
-      // Log per debuggare il payload degli items effettivamente inviato a Openapi
-      console.log("Items EFFETTIVAMENTE inviati a Openapi (dopo filtro):", JSON.stringify(itemsMappatiPerOpenAPI, null, 2));
-// Calcolo coerente dei pagamenti
-const totale = parseFloat(dati.totale) || 0;
-let cash = parseFloat(dati.pagamentoContanti) || 0;
-let electronic = parseFloat(dati.pagamentoCarta) || 0;
-let ticket = parseFloat(dati.pagamentoTicket) || 0;
+    const totale = parseFloat(dati.totale) || 0;
 
-let sommaPagamenti = cash + electronic + ticket;
+    // Inizializza tutti gli importi a zero per poi popolarli condizionalmente
+    let cash_payment_amount = 0;
+    let electronic_payment_amount = 0;
+    let ticket_restaurant_payment_amount = 0;
+    let ticket_restaurant_quantity = 0;
+    let goods_uncollected_amount = 0;
+    let services_uncollected_amount = 0;
+    let invoice_issuing = false; // Mantenuto a false, "Segue Fattura" non è più gestito
 
-// Se c'è una discrepanza, correggiamo il campo electronic o ticket
-if (sommaPagamenti < totale) {
-  const differenza = parseFloat((totale - sommaPagamenti).toFixed(2));
-  // Aggiungiamo alla parte elettronica se già presente, altrimenti a contanti
-  if (electronic > 0) {
-    electronic += differenza;
-  } else if (cash > 0) {
-    cash += differenza;
-  } else {
-    ticket += differenza;
-  }
-} else if (sommaPagamenti > totale) {
-  const eccedenza = parseFloat((sommaPagamenti - totale).toFixed(2));
-  // Proviamo a rimuovere prima da ticket, poi da electronic, poi da cash
-  if (ticket >= eccedenza) {
-    ticket -= eccedenza;
-  } else if (electronic >= eccedenza) {
-    electronic -= eccedenza;
-  } else {
-    cash -= eccedenza;
-  }
-}
-// Se è stato pagato qualcosa con ticket ma la quantità è zero o mancante, impostala a 1 per compatibilità OpenAPI
-if (ticket > 0 && (!dati.numeroTicket || Number(dati.numeroTicket) <= 0)) {
-  dati.numeroTicket = 1;
-}
-      const payloadCompletoPerOpenAPI = {
-  fiscal_id: dati.partitaIva,
-  items: itemsMappatiPerOpenAPI,
-  cash_payment_amount: parseFloat(cash.toFixed(2)),
-  electronic_payment_amount: parseFloat(electronic.toFixed(2)),
-  ticket_restaurant_payment_amount: parseFloat(ticket.toFixed(2)),
-  ticket_restaurant_quantity: Number(dati.numeroTicket) || 0,
-  goods_uncollected_amount: 0,
-  services_uncollected_amount: 0,
-  invoice_issuing: false,
-  tags: codiceLotteria ? [`codice_lotteria:${codiceLotteria}`] : []
-};
+    // NUOVA LOGICA: Popola i campi di pagamento in base alla modalità ricevuta dal frontend
+    switch (modalitaPagamentoFrontend) {
+      case 'Contanti':
+        cash_payment_amount = totale;
+        break;
+      case 'Elettronico':
+        electronic_payment_amount = totale;
+        break;
+      case 'Non riscosso - Beni':
+        goods_uncollected_amount = totale;
+        break;
+      case 'Non riscosso - Servizi':
+        services_uncollected_amount = totale;
+        break;
+      default:
+        // Fallback per modalità sconosciute o non gestite, logga un warning
+        console.warn(`Modalità di pagamento sconosciuta o non gestita: ${modalitaPagamentoFrontend}. Nessun importo specifico impostato.`);
+    }
+
+    // Se il frontend ha inviato dati per ticket (es. per future implementazioni o test)
+    if (dati.pagamentoTicket && parseFloat(dati.pagamentoTicket) > 0) {
+        ticket_restaurant_payment_amount = parseFloat(dati.pagamentoTicket);
+        ticket_restaurant_quantity = Number(dati.numeroTicket) || 1; // Default a 1 se l'importo c'è ma la quantità no
+    }
+
+
+    const payloadCompletoPerOpenAPI = {
+      fiscal_id: dati.partitaIva,
+      items: itemsMappatiPerOpenAPI,
+      cash_payment_amount: parseFloat(cash_payment_amount.toFixed(2)),
+      electronic_payment_amount: parseFloat(electronic_payment_amount.toFixed(2)),
+      ticket_restaurant_payment_amount: parseFloat(ticket_restaurant_payment_amount.toFixed(2)),
+      ticket_restaurant_quantity: ticket_restaurant_quantity,
+      goods_uncollected_amount: parseFloat(goods_uncollected_amount.toFixed(2)),
+      services_uncollected_amount: parseFloat(services_uncollected_amount.toFixed(2)),
+      invoice_issuing: invoice_issuing, // Sarà sempre false
+      tags: codiceLotteria ? [`codice_lotteria:${codiceLotteria}`] : []
+    };
       
-      // console.log("Payload COMPLETO inviato a Openapi:", JSON.stringify(payloadCompletoPerOpenAPI, null, 2));
+    // console.log("Payload COMPLETO inviato a Openapi:", JSON.stringify(payloadCompletoPerOpenAPI, null, 2));
 
-      const risposta = await axios.post(
-        'https://test.invoice.openapi.com/IT-receipts',
-        payloadCompletoPerOpenAPI,
-        {
-          headers: {
-            Authorization: `Bearer ${OPENAPI_KEY}`,
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-
-      console.log('🧾 Risposta Openapi:', JSON.stringify(risposta.data, null, 2));
-      res.status(200).json({ 
-          success: true, 
-          id: risposta.data?.data?.id ?? null, 
-          dati: risposta.data 
-        });
-    } catch (errore) {
-      console.error('❌ Errore invio scontrino a Openapi:', errore.response?.data || errore.message);
-      const statusErrore = errore.response?.status || 500;
-      let messaggioDettaglio = errore.message; 
-      if (errore.response?.data) {
-          if (typeof errore.response.data === 'object' && errore.response.data !== null) {
-              const openapiErrorData = errore.response.data;
-              if (openapiErrorData.dettaglio && typeof openapiErrorData.dettaglio === 'object' && openapiErrorData.dettaglio !== null && openapiErrorData.dettaglio.message) {
-                messaggioDettaglio = openapiErrorData.dettaglio.message;
-              } else if (openapiErrorData.message) {
-                messaggioDettaglio = openapiErrorData.message;
-              } else if (openapiErrorData.errore) {
-                messaggioDettaglio = openapiErrorData.errore;
-              } else {
-                messaggioDettaglio = JSON.stringify(openapiErrorData);
-              }
-          } else {
-              messaggioDettaglio = errore.response.data.toString();
-          }
+    const risposta = await axios.post(
+      'https://test.invoice.openapi.com/IT-receipts',
+      payloadCompletoPerOpenAPI,
+      {
+        headers: {
+          Authorization: `Bearer ${OPENAPI_KEY}`,
+          'Content-Type': 'application/json',
+        },
       }
-      res.status(statusErrore).json({
-        errore: `Errore durante invio scontrino (Openapi status: ${statusErrore})`,
-        dettaglio: messaggioDettaglio,
+    );
+
+    console.log('🧾 Risposta Openapi:', JSON.stringify(risposta.data, null, 2));
+    res.status(200).json({ 
+        success: true, 
+        id: risposta.data?.data?.id ?? null, 
+        dati: risposta.data 
       });
+  } catch (errore) {
+    console.error('❌ Errore invio scontrino a Openapi:', errore.response?.data || errore.message);
+    const statusErrore = errore.response?.status || 500;
+    let messaggioDettaglio = errore.message; 
+    if (errore.response?.data) {
+        if (typeof errore.response.data === 'object' && errore.response.data !== null) {
+            const openapiErrorData = errore.response.data;
+            if (openapiErrorData.dettaglio && typeof openapiErrorData.dettaglio === 'object' && openapiErrorData.dettaglio !== null && openapiErrorData.dettaglio.message) {
+              messaggioDettaglio = openapiErrorData.dettaglio.message;
+            } else if (openapiErrorData.message) {
+              messaggioDettaglio = openapiErrorData.message;
+            } else if (openapiErrorData.errore) {
+              messaggioDettaglio = openapiErrorData.errore;
+            } else {
+              messaggioDettaglio = JSON.stringify(openapiErrorData);
+            }
+        } else {
+            messaggioDettaglio = errore.response.data.toString();
+        }
     }
-  });
+    res.status(statusErrore).json({
+      errore: `Errore durante invio scontrino (Openapi status: ${statusErrore})`,
+      dettaglio: messaggioDettaglio,
+    });
+  }
+});
 
 // ❌ ANNULLA SCONTRINO EMESSO (invariata)
 app.post('/api/elimina-scontrino', async (req, res) => {
