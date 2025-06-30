@@ -7,7 +7,7 @@ app.use(cors());
 app.use(express.json());
 
 const PORT = process.env.PORT || 3000;
-const OPENAPI_KEY = '6832e7b00af61204d2092f68'; // ✅ Chiave di PRODUZIONE Openapi
+const OPENAPI_KEY = '6862a3b357c08077f206bb4c'; // ✅ Chiave di PRODUZIONE Openapi
 
 // Middleware (incluso per contesto, assicurati che aziendeDisattivate sia definito correttamente nel tuo ambiente)
 // Elenco temporaneo di aziende disattivate (usa fiscal_id) - SPOSTA QUESTA DEFINIZIONE PIÙ IN ALTO O IN UN MODULO SEPARATO
