@@ -9,8 +9,7 @@ app.use(express.json());
 const PORT = process.env.PORT || 3000;
 const OPENAPI_KEY = '6862a3b357c08077f206bb4c'; // ✅ Chiave di PRODUZIONE Openapi
 
-// Middleware (incluso per contesto, assicurati che aziendeDisattivate sia definito correttamente nel tuo ambiente)
-// Elenco temporaneo di aziende disattivate (usa fiscal_id) - SPOSTA QUESTA DEFINIZIONE PIÙ IN ALTO O IN UN MODULO SEPARATO
+// Elenco temporaneo di aziende disattivate (usa fiscal_id)
 const aziendeDisattivate = new Set([
   '04657834459', // esempio
   '12345678901'  // altro esempio
@@ -27,15 +26,15 @@ function bloccaAziendeDisattivate(req, res, next) {
     return res.status(403).json({ errore: 'Azienda disattivata per morosità' });
   }
 
-  next(); // altrimenti prosegui
+  next();
 }
 
-// 🔍 ROUTE DI TEST (invariata)
+// ROUTE DI TEST
 app.get('/', (req, res) => {
   res.send('✅ Backend PRODUZIONE attivo e funzionante!');
 });
 
-// 🏢 CREAZIONE CONFIGURAZIONE AZIENDA (invariata)
+// CREAZIONE CONFIGURAZIONE AZIENDA
 app.post('/api/crea-azienda', async (req, res) => {
   const dati = req.body;
 
@@ -99,12 +98,13 @@ app.post('/api/crea-azienda', async (req, res) => {
 });
 
 
-// 🧾 INVIO SCONTRINO (CON LOGICA items E PAGAMENTI MODIFICATA)
+// INVIO SCONTRINO
 app.post('/api/invia-scontrino', bloccaAziendeDisattivate, async (req, res) => {
-  const dati = req.body; // Dati inviati dal frontend Flutter
+  const dati = req.body;
   const codiceLotteria = dati.codice_lotteria || null;
-  // NUOVA: Ricevi la modalità di pagamento dal frontend
-  const modalitaPagamentoFrontend = dati.modalitaPagamento;
+  
+  // ✅ RECUPERA IL CODICE DEL TICKET DALLA RICHIESTA
+  const codiceTicket = dati.codiceTicket || null;
 
   if (
     !dati.partitaIva ||
@@ -115,14 +115,15 @@ app.post('/api/invia-scontrino', bloccaAziendeDisattivate, async (req, res) => {
   }
 
   try {
-    // Filtra gli item: escludi quelli con unit_price === 0 (es. le note)
     const prodottiFiltratiPerOpenAPI = dati.prodotti.filter(p => {
+      // Filtra gli oggetti speciali usati dall'app (es. info ticket) e gli item a prezzo zero
+      if (p.isTicketInfo === true) return false;
       const unitPrice = parseFloat(p.unit_price) || 0;
       if (unitPrice === 0) {
         console.log(`INFO: Articolo "${p.description}" con prezzo 0 filtrato, non verrà inviato a Openapi.`);
-        return false; // Escludi questo item
+        return false;
       }
-      return true; // Mantieni questo item
+      return true;
     });
 
     if (dati.prodotti.length > 0 && prodottiFiltratiPerOpenAPI.length === 0) {
@@ -135,7 +136,6 @@ app.post('/api/invia-scontrino', bloccaAziendeDisattivate, async (req, res) => {
       });
     }
 
-    // Mappa gli item filtrati per il payload di Openapi
     const itemsMappatiPerOpenAPI = prodottiFiltratiPerOpenAPI.map(p => {
       const itemData = {
         quantity: Number(p.quantity) || 1,
@@ -145,50 +145,38 @@ app.post('/api/invia-scontrino', bloccaAziendeDisattivate, async (req, res) => {
         complimentary: p.complimentary === true,
         sku: p.sku ?? ''
       };
-
       itemData.discount = parseFloat(p.discount) || 0;
-
       return itemData;
     });
 
     console.log("Items EFFETTIVAMENTE inviati a Openapi (dopo filtro):", JSON.stringify(itemsMappatiPerOpenAPI, null, 2));
 
-    const totale = parseFloat(dati.totale) || 0;
-
-    // Inizializza tutti gli importi a zero per poi popolarli condizionalmente
-    let cash_payment_amount = 0;
-    let electronic_payment_amount = 0;
-    let ticket_restaurant_payment_amount = 0;
-    let ticket_restaurant_quantity = 0;
+    // ✅ MODIFICA: Usa direttamente i valori di pagamento inviati dall'app Flutter,
+    // che ha già calcolato correttamente i pagamenti misti.
+    let cash_payment_amount = dati.pagamentoContanti || 0;
+    let electronic_payment_amount = dati.pagamentoCarta || 0;
+    let ticket_restaurant_payment_amount = dati.pagamentoTicket || 0;
+    let ticket_restaurant_quantity = dati.numeroTicket || 0;
+    
+    // La logica per i non riscossi rimane, basata sulla modalità di pagamento
     let goods_uncollected_amount = 0;
     let services_uncollected_amount = 0;
-    let invoice_issuing = false; // Mantenuto a false, "Segue Fattura" non è più gestito
-
-    // NUOVA LOGICA: Popola i campi di pagamento in base alla modalità ricevuta dal frontend
-    switch (modalitaPagamentoFrontend) {
-      case 'Contanti':
-        cash_payment_amount = totale;
-        break;
-      case 'Elettronico':
-        electronic_payment_amount = totale;
-        break;
-      case 'Non riscosso - Beni':
-        goods_uncollected_amount = totale;
-        break;
-      case 'Non riscosso - Servizi':
-        services_uncollected_amount = totale;
-        break;
-      default:
-        // Fallback per modalità sconosciute o non gestite, logga un warning
-        console.warn(`Modalità di pagamento sconosciuta o non gestita: ${modalitaPagamentoFrontend}. Nessun importo specifico impostato.`);
+    if (dati.modalitaPagamento === 'Non riscosso - Beni') {
+        goods_uncollected_amount = parseFloat(dati.totale) || 0;
+    }
+    if (dati.modalitaPagamento === 'Non riscosso - Servizi') {
+        services_uncollected_amount = parseFloat(dati.totale) || 0;
     }
 
-    // Se il frontend ha inviato dati per ticket (es. per future implementazioni o test)
-    if (dati.pagamentoTicket && parseFloat(dati.pagamentoTicket) > 0) {
-        ticket_restaurant_payment_amount = parseFloat(dati.pagamentoTicket);
-        ticket_restaurant_quantity = Number(dati.numeroTicket) || 1; // Default a 1 se l'importo c'è ma la quantità no
-    }
 
+    // ✅ MODIFICA: COSTRUISCE L'ARRAY DEI TAG IN MODO DINAMICO
+    const tagsDaInviare = [];
+    if (codiceLotteria) {
+      tagsDaInviare.push(`codice_lotteria:${codiceLotteria}`);
+    }
+    if (codiceTicket) {
+      tagsDaInviare.push(`codice_ticket:${codiceTicket}`);
+    }
 
     const payloadCompletoPerOpenAPI = {
       fiscal_id: dati.partitaIva,
@@ -199,12 +187,10 @@ app.post('/api/invia-scontrino', bloccaAziendeDisattivate, async (req, res) => {
       ticket_restaurant_quantity: ticket_restaurant_quantity,
       goods_uncollected_amount: parseFloat(goods_uncollected_amount.toFixed(2)),
       services_uncollected_amount: parseFloat(services_uncollected_amount.toFixed(2)),
-      invoice_issuing: invoice_issuing, // Sarà sempre false
-      tags: codiceLotteria ? [`codice_lotteria:${codiceLotteria}`] : []
+      invoice_issuing: false,
+      tags: tagsDaInviare // Usa l'array aggiornato
     };
       
-    // console.log("Payload COMPLETO inviato a Openapi:", JSON.stringify(payloadCompletoPerOpenAPI, null, 2));
-
     const risposta = await axios.post(
       'https://test.invoice.openapi.com/IT-receipts',
       payloadCompletoPerOpenAPI,
@@ -249,14 +235,11 @@ app.post('/api/invia-scontrino', bloccaAziendeDisattivate, async (req, res) => {
   }
 });
 
-// ❌ ANNULLA SCONTRINO EMESSO (invariata)
+// ANNULLA SCONTRINO EMESSO
 app.post('/api/elimina-scontrino', async (req, res) => {
   const { idOpenapi } = req.body;
 
-  console.log('📥 Richiesta ricevuta per eliminare scontrino:', idOpenapi);
-
   if (!idOpenapi) {
-    console.warn('⚠️ ID Openapi mancante nella richiesta.');
     return res.status(400).json({ errore: 'ID Openapi mancante' });
   }
 
@@ -271,19 +254,17 @@ app.post('/api/elimina-scontrino', async (req, res) => {
       }
     );
 
-    console.log('✅ Scontrino eliminato correttamente da OpenAPI:', risposta.data);
-
-    return res.status(200).json({ success: true, data: risposta.data });
+    res.status(200).json({ success: true, data: risposta.data });
   } catch (errore) {
     console.error('❌ Errore durante annullamento scontrino:', errore.response?.data || errore.message);
-    return res.status(500).json({
+    res.status(500).json({
       errore: 'Errore durante annullamento scontrino',
       dettaglio: errore.response?.data || errore.message,
     });
   }
 });
 
-// ✅ Recupera configurazioni aziende da OpenAPI (invariata)
+// Recupera configurazioni aziende da OpenAPI
 app.get('/api/utenti-configurati', async (req, res) => {
   try {
     const risposta = await axios.get(
@@ -306,20 +287,20 @@ app.get('/api/utenti-configurati', async (req, res) => {
   }
 });
 
-// ✅ Ottieni tutti gli scontrini per una data azienda (avevi due definizioni, ne tengo una)
+// Ottieni tutti gli scontrini per una data azienda
 app.get('/api/scontrini/:fiscal_id', async (req, res) => {
-  const { fiscal_id } = req.params; // Usa destructuring coerentemente
+  const { fiscal_id } = req.params;
 
   try {
     const risposta = await axios.get(`https://test.invoice.openapi.com/IT-receipts`, {
-      params: { fiscal_id }, // Invia fiscal_id come query parameter
+      params: { fiscal_id },
       headers: {
         Authorization: `Bearer ${OPENAPI_KEY}`,
         'Content-Type': 'application/json',
       },
     });
 
-    res.status(200).json(risposta.data.data); // OpenAPI di solito ha i dati in 'data.data' per le liste
+    res.status(200).json(risposta.data.data);
   } catch (errore) {
     console.error('❌ Errore recupero scontrini:', errore.response?.data || errore.message);
     res.status(500).json({
@@ -329,7 +310,7 @@ app.get('/api/scontrini/:fiscal_id', async (req, res) => {
   }
 });
 
-// ✅ Ottieni dettagli azienda (invariata)
+// Ottieni dettagli azienda
 app.get('/api/azienda/:fiscal_id', async (req, res) => {
   const fiscalId = req.params.fiscal_id;
 
@@ -355,7 +336,7 @@ app.get('/api/azienda/:fiscal_id', async (req, res) => {
 });
 
 
-// ✅ Disattiva scontrini (invariata)
+// Disattiva scontrini
 app.post('/api/disattiva-scontrini/:fiscal_id', async (req, res) => {
   const { fiscal_id } = req.params;
 
@@ -381,7 +362,7 @@ app.post('/api/disattiva-scontrini/:fiscal_id', async (req, res) => {
   }
 });
 
-// ✅ Attiva scontrini (invariata)
+// Attiva scontrini
 app.post('/api/attiva-scontrini/:fiscal_id', async (req, res) => {
   const fiscalId = req.params.fiscal_id;
   const { taxCode, password, pin } = req.body; 
@@ -420,7 +401,7 @@ app.post('/api/attiva-scontrini/:fiscal_id', async (req, res) => {
 });
 
 
-// 🚀 AVVIO SERVER (invariato)
+// AVVIO SERVER
 app.listen(PORT, () => {
   console.log(`✅ Server PRODUZIONE avviato sulla porta ${PORT}`);
 });
